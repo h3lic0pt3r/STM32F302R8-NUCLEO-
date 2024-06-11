@@ -50,21 +50,26 @@ typedef struct{
 	TIM_HandleTypeDef htim1;
 } Wire;
 
-Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
-  Wire wire;
-  wire.GPIOx = gpiox;
-  wire.Pin = pin;
-  wire.htim1 = htim1;
-  return &wire;
-}
+
 
 void MX_GPIO_DeInit(Wire*);
 void delay (Wire*, uint32_t);
 uint8_t PINSTATE(Wire*);
 void BUS_REINIT(Wire*,uint8_t);
+void WIRE_AS_OUTPUT(Wire *);
+void WIRE_AS_INPUT(Wire *);
+int8_t Wire_INIT(Wire *);
 
+Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
+  Wire wire;
+  wire.GPIOx = gpiox;
+  wire.Pin = pin;
+  wire.htim1 = htim1;
+  Wire_INIT(&wire);
+  return &wire;
+}
 
-	// Function to transmit a single byte using single-wire UART
+// Function to transmit a single byte using single-wire UART
 		void WRITE(Wire *wire,uint8_t data) {
 
 		  // Define timing constants based on baud rate (adjust as needed)
@@ -78,23 +83,18 @@ void BUS_REINIT(Wire*,uint8_t);
 		  // Data bits (LSB first)
 		  for (int i = 0; i < 8; i++) {
 			if (data & (1 << i)) {
-			  MX_GPIO_DeInit(wire);
-			  BUS_REINIT(wire,1);
+			  WIRE_AS_OUTPUT(wire);
 			  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
 			  delay(wire,1);
-			  MX_GPIO_DeInit(wire);
-			  BUS_REINIT(wire,0);
+			  WIRE_AS_INPUT(wire);
 			  delay(wire,60);
 
 			} else {
-			  MX_GPIO_DeInit(wire);
-			  BUS_REINIT(wire,1);
+			  WIRE_AS_OUTPUT(wire);
 			  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
 			  delay(wire,60);
 
-
-			  MX_GPIO_DeInit(wire);
-			  BUS_REINIT(wire,0);
+			  WIRE_AS_INPUT(wire);
 			}
 			HAL_Delay(bit_duration);
 		  }
@@ -116,8 +116,7 @@ void BUS_REINIT(Wire*,uint8_t);
 		  // Simulate receiving data (replace with actual receiver implementation)
 		  uint8_t received_data = 0;
 
-		  MX_GPIO_DeInit(wire);
-		  BUS_REINIT(wire,1);
+
 		  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin, GPIO_PIN_RESET);
 		  delay(wire,2);
 		  // Sample data bits (mid-bit)
@@ -137,8 +136,7 @@ void BUS_REINIT(Wire*,uint8_t);
 			HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
 			delay(wire,480);
 
-		    MX_GPIO_DeInit(wire);
-		    BUS_REINIT(wire, 0);
+			WIRE_AS_INPUT(wire);
 		    delay(wire,80);
 
 		    if(HAL_GPIO_ReadPin(wire->GPIOx, wire->Pin)==GPIO_PIN_RESET){
@@ -214,3 +212,11 @@ void BUS_REINIT(Wire*,uint8_t);
 				__NOP();
 		}
 
+		void WIRE_AS_OUTPUT(Wire * wire){
+			MX_GPIO_DeInit(wire);
+			BUS_REINIT(wire,1);
+		}
+		void WIRE_AS_INPUT(Wire * wire){
+			MX_GPIO_DeInit(wire);
+			BUS_REINIT(wire,0);
+		}
