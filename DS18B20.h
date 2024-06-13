@@ -7,7 +7,8 @@
 /* USER CODE BEGIN Includes */
 #include"stm32f3xx.h"
 #include"stm32f3xx_hal.h"
-
+#include<stdlib.h>
+#include<string.h>
 
 
 #define BAUDRATE 38400
@@ -60,13 +61,11 @@ void WIRE_AS_OUTPUT(Wire *);
 void WIRE_AS_INPUT(Wire *);
 int8_t Wire_INIT(Wire *);
 
-Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
-  Wire wire;
-  wire.GPIOx = gpiox;
-  wire.Pin = pin;
-  wire.htim1 = htim1;
-  Wire_INIT(&wire);
-  return &wire;
+void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
+  memcpy(&(wire->GPIOx), &gpiox, sizeof(GPIO_TypeDef*));
+  memcpy(&(wire->Pin), &pin, sizeof(int16_t));
+  memcpy(&(wire->htim1), &htim1,sizeof(TIM_HandleTypeDef));
+//  Wire_INIT(&wire);
 }
 
 // Function to transmit a single byte using single-wire UART
@@ -110,7 +109,7 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 		}
 
 
-		// Function to receive a single byte using single-wire UART (for simulation purposes)
+// Function to receive a single byte using single-wire UART (for simulation purposes)
 		uint8_t READ(Wire *wire) {
 
 		  // Simulate receiving data (replace with actual receiver implementation)
@@ -131,8 +130,9 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 		  return received_data;  // Replace with actual pin reading
 		}
 
-
+//function to reset wire and recieve presence pulse
 		int8_t Wire_INIT(Wire *wire){
+			WIRE_AS_OUTPUT(wire);
 			HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
 			delay(wire,480);
 
@@ -148,7 +148,7 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 				return 0;
 		    }
 		}
-
+//function to reinitialise a pin to desired mode
 		void BUS_REINIT(Wire *wire,uint8_t type){
 
 			  GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -170,7 +170,7 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 			}
 		}
 
-
+//funciton to deinitialise a pin
 		void MX_GPIO_DeInit(Wire *wire) {
 		  /* Check if the peripheral is still instantiated (optional) */
 		  // You can remove this check or implement a simpler check using GPIOx
@@ -189,7 +189,7 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 		  CLEAR_BIT(wire->GPIOx->PUPDR, (3 << (wire->Pin * 2)));
 		}
 
-
+//function to check state of pin
 		uint8_t PINSTATE(Wire *wire){
 			if(HAL_GPIO_ReadPin(wire->GPIOx,wire->Pin) == GPIO_PIN_SET)
 				return 1;
@@ -204,7 +204,7 @@ Wire * init_wire(GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
 				}
 		}
 
-
+//microsecond delay function
 		void delay (Wire *wire, uint32_t us)
 		{
 			__HAL_TIM_SET_COUNTER(&(wire->htim1),0);
