@@ -11,7 +11,7 @@
 #include<string.h>
 
 
-#define BAUDRATE 38400
+//#define BAUDRATE 9600
 
 // Scratchpad locations
 #define TEMP_LSB        0
@@ -52,6 +52,7 @@ typedef struct{
 } Wire;
 
 
+UART_HandleTypeDef * huart;
 
 void MX_GPIO_DeInit(Wire*);
 void delay (Wire*, uint32_t);
@@ -60,6 +61,15 @@ void BUS_REINIT(Wire*,uint8_t);
 void WIRE_AS_OUTPUT(Wire *);
 void WIRE_AS_INPUT(Wire *);
 int8_t Wire_INIT(Wire *);
+
+void setuart(UART_HandleTypeDef * huartx){
+	huart = huartx;
+}
+
+char newline[]  = "\r\n";
+char zer[] = "0";
+char one[] = "1";
+
 
 void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef htim1) {
   memcpy(&(wire->GPIOx), &gpiox, sizeof(GPIO_TypeDef*));
@@ -70,42 +80,31 @@ void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef 
 
 // Function to transmit a single byte using single-wire UART
 		void WRITE(Wire *wire,uint8_t data) {
-
-		  // Define timing constants based on baud rate (adjust as needed)
-		  uint32_t bit_duration = 1000000 / BAUDRATE; // Time for one bit in microseconds
-		  uint32_t start_bit_duration = bit_duration * 3; // Start bit duration (longer)
-
-		  // Start bit (low for extended duration)
-		  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
-		  HAL_Delay(start_bit_duration);
-
+			int t ;
+			uint8_t bitstream[14] ="";
 		  // Data bits (LSB first)
-		  for (int i = 0; i < 8; i++) {
-			if (data & (1 << i)) {
-			  WIRE_AS_OUTPUT(wire);
+		  for (int i = 7; i >= 0 ; i-- ) {
+			  t = (data>>i)&1;
+			if (t){
+			  strcat(bitstream , one);
+			  WIRE_AS_OUTPUT(wire);			//write 1
 			  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
 			  delay(wire,1);
 			  WIRE_AS_INPUT(wire);
-			  delay(wire,60);
+			  delay(wire,70);
 
 			} else {
-			  WIRE_AS_OUTPUT(wire);
+			  strcat(bitstream, zer);
+			  WIRE_AS_OUTPUT(wire);			//write 0
 			  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
-			  delay(wire,60);
+			  delay(wire,70);
 
 			  WIRE_AS_INPUT(wire);
 			}
-			HAL_Delay(bit_duration);
+			delay(wire,5);
 		  }
-
-		//  // Parity bit (even parity in this example)
-		//  set_pin_high(pin); // Set high for even parity (all data bits are 1 in 0x44)
-		//  delay_microseconds(bit_duration);
-
-		  // Stop bit (low for bit duration)
-		  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
-
-		  HAL_Delay(bit_duration);
+		  strcat((char*)bitstream, newline);
+		  HAL_UART_Transmit(huart, bitstream, sizeof(bitstream), 100);
 		}
 
 
@@ -115,17 +114,20 @@ void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef 
 		  // Simulate receiving data (replace with actual receiver implementation)
 		  uint8_t received_data = 0;
 
-
-		  HAL_GPIO_WritePin(wire->GPIOx,wire->Pin, GPIO_PIN_RESET);
-		  delay(wire,2);
-		  // Sample data bits (mid-bit)
-		  for (int i = 0; i < 8; i++) {
-			received_data |= (PINSTATE(wire) << i);
-			delay(wire,60); // Sample mid-bit
+		  for(int i =0; i<8; i++){
+			  WIRE_AS_OUTPUT(wire);
+			  HAL_GPIO_WritePin(wire->GPIOx, wire->Pin, GPIO_PIN_RESET);
+			  delay(wire, 1);
+			  WIRE_AS_INPUT(wire);
+//			  while(HAL_GPIO_ReadPin(wire->GPIOx,wire->Pin)==GPIO_PIN_RESET){
+//				  __NOP();
+//			  }
+//			  delay(wire , 2);
+			  delay(wire ,15);
+			  if(HAL_GPIO_ReadPin(wire->GPIOx,wire->Pin)== GPIO_PIN_SET)
+				  received_data |=1<<i;
+			  delay(wire, 60);
 		  }
-
-		  // Simulate parity check (even parity in this example)
-		  // Implement actual parity check in a real receiver
 
 		  return received_data;  // Replace with actual pin reading
 		}
@@ -134,17 +136,20 @@ void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef 
 		int8_t Wire_INIT(Wire *wire){
 			WIRE_AS_OUTPUT(wire);
 			HAL_GPIO_WritePin(wire->GPIOx,wire->Pin,GPIO_PIN_RESET);
-			delay(wire,480);
+			delay(wire,500);
 
 			WIRE_AS_INPUT(wire);
-		    delay(wire,80);
+			while(HAL_GPIO_ReadPin(wire->GPIOx, wire->Pin)==GPIO_PIN_RESET){
+				__NOP();
+			}
+			delay(wire,30);
 
 		    if(HAL_GPIO_ReadPin(wire->GPIOx, wire->Pin)==GPIO_PIN_RESET){
-		    	delay(wire,400);
+		    	delay(wire,480);
 		    	return 1;
 		    }
 		    else{
-		    	delay(wire,400);
+		    	delay(wire,480);
 				return 0;
 		    }
 		}
@@ -208,7 +213,7 @@ void init_wire(Wire * wire, GPIO_TypeDef* gpiox, int16_t pin, TIM_HandleTypeDef 
 		void delay (Wire *wire, uint32_t us)
 		{
 			__HAL_TIM_SET_COUNTER(&(wire->htim1),0);
-			while ((__HAL_TIM_GET_COUNTER(&(wire->htim1)))<us)
+			while ((__HAL_TIM_GET_COUNTER(&(wire->htim1)))<(us/2))
 				__NOP();
 		}
 
